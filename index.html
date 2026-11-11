@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssetCare-Sim | Otimizador de Manutenção Preventiva</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    canvas { width: 100% !important; height: 100% !important; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+  <nav class="border-b border-slate-800 bg-slate-950/70 backdrop-blur px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center space-x-3">
+      <span class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">AssetCare-Sim</span>
+      <span class="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800 px-2 py-0.5 rounded-full font-mono">v1.0.0</span>
+    </div>
+    <div class="text-xs text-slate-400">Otimizador Preditivo de Ativos Críticos</div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <section class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur h-fit">
+      <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <span>⚙️</span> Parâmetros Operacionais
+      </h2>
+
+      <form id="sim-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Nome do Equipamento / Ativo</label>
+          <input type="text" id="assetName" value="Motor de Tração AC-350" required
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Horas Operação/Dia</label>
+            <input type="number" id="dailyHours" value="16" min="1" max="24" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">MTBF Teórico (Horas)</label>
+            <input type="number" id="mtbfHours" value="4500" min="100" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Custo Preventiva ($)</label>
+            <input type="number" id="costPreventive" value="1200" min="0" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Custo Corretiva ($)</label>
+            <input type="number" id="costCorrective" value="8500" min="0" required
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Janela de Intervenção (Horas): <span id="currentIntervalLabel" class="text-cyan-400 font-bold">3000</span>h</label>
+          <input type="range" id="intervalSlider" min="500" max="8000" step="250" value="3000" class="w-full accent-cyan-500 cursor-pointer">
+        </div>
+
+        <button type="submit" 
+          class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium py-2.5 rounded-lg transition duration-200 shadow-lg shadow-cyan-500/20">
+          Recalcular Simulação
+        </button>
+      </form>
+    </section>
+
+    <section class="lg:col-span-2 space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div class="text-xs text-slate-400">Custo Total Projetado (Anual)</div>
+          <div id="metricTotalCost" class="text-2xl font-bold text-white mt-1">$ 0.00</div>
+          <div class="text-xs text-emerald-400 mt-1 font-mono">Balanço anual estimado</div>
+        </div>
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div class="text-xs text-slate-400">Risco Estimado de Falha</div>
+          <div id="metricFailureRisk" class="text-2xl font-bold text-cyan-400 mt-1">0%</div>
+          <div class="text-xs text-slate-500 mt-1">Probabilidade no ciclo</div>
+        </div>
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div class="text-xs text-slate-400">Intervalo Recomendado</div>
+          <div id="metricOptimalInterval" class="text-2xl font-bold text-blue-400 mt-1">-- h</div>
+          <div class="text-xs text-slate-500 mt-1">Mínimo custo total</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 shadow-xl">
+        <h3 class="text-sm font-semibold text-slate-300 mb-4">Curva de Otimização: Custo Preventivo vs. Custo de Risco</h3>
+        <div class="w-full h-80">
+          <canvas id="costChart"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('sim-form');
+      const intervalSlider = document.getElementById('intervalSlider');
+      const currentIntervalLabel = document.getElementById('currentIntervalLabel');
+      const metricTotalCost = document.getElementById('metricTotalCost');
+      const metricFailureRisk = document.getElementById('metricFailureRisk');
+      const metricOptimalInterval = document.getElementById('metricOptimalInterval');
+      let costChartInstance = null;
+
+      intervalSlider.addEventListener('input', (e) => {
+        currentIntervalLabel.textContent = e.target.value;
+      });
+
+      function calculateFailureProbability(hours, mtbf) {
+        return 1 - Math.exp(-hours / mtbf);
+      }
+
+      function runSimulation() {
+        const dailyHours = parseFloat(document.getElementById('dailyHours').value);
+        const mtbf = parseFloat(document.getElementById('mtbfHours').value);
+        const costPrev = parseFloat(document.getElementById('costPreventive').value);
+        const costCorr = parseFloat(document.getElementById('costCorrective').value);
+        const selectedInterval = parseFloat(intervalSlider.value);
+        const operationalHoursYear = dailyHours * 365;
+
+        const testIntervals = [];
+        const preventiveCosts = [];
+        const correctiveRisks = [];
+        const totalCosts = [];
+        let lowestCost = Infinity;
+        let optimalInterval = selectedInterval;
+
+        for (let h = 500; h <= 8000; h += 250) {
+          testIntervals.push(h);
+          const numPreventives = operationalHoursYear / h;
+          const annualPrevCost = numPreventives * costPrev;
+          const probFailure = calculateFailureProbability(h, mtbf);
+          const annualCorrCost = numPreventives * probFailure * costCorr;
+          const totalAnnualCost = annualPrevCost + annualCorrCost;
+
+          preventiveCosts.push(annualPrevCost);
+          correctiveRisks.push(annualCorrCost);
+          totalCosts.push(totalAnnualCost);
+
+          if (totalAnnualCost < lowestCost) {
+            lowestCost = totalAnnualCost;
+            optimalInterval = h;
+          }
+        }
+
+        const currentNumPreventives = operationalHoursYear / selectedInterval;
+        const currentPrevCost = currentNumPreventives * costPrev;
+        const currentProb = calculateFailureProbability(selectedInterval, mtbf);
+        const currentCorrCost = currentNumPreventives * currentProb * costCorr;
+        const currentTotalCost = currentPrevCost + currentCorrCost;
+
+        metricTotalCost.textContent = `$ ${currentTotalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        metricFailureRisk.textContent = `${(currentProb * 100).toFixed(1)}%`;
+        metricOptimalInterval.textContent = `${optimalInterval} h`;
+
+        renderChart(testIntervals, preventiveCosts, correctiveRisks, totalCosts);
+      }
+
+      function renderChart(intervals, prevCosts, corrCosts, totalCosts) {
+        const ctx = document.getElementById('costChart').getContext('2d');
+        if (costChartInstance) costChartInstance.destroy();
+
+        costChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: intervals.map(h => `${h}h`),
+            datasets: [
+              {
+                label: 'Custo Total Projetado ($)',
+                data: totalCosts,
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                borderWidth: 3,
+                tension: 0.3
+              },
+              {
+                label: 'Custo Preventivas ($)',
+                data: prevCosts,
+                borderColor: '#10b981',
+                borderDash: [5, 5],
+                borderWidth: 2,
+                tension: 0.3
+              },
+              {
+                label: 'Custo Esperado Falhas ($)',
+                data: corrCosts,
+                borderColor: '#f43f5e',
+                borderDash: [5, 5],
+                borderWidth: 2,
+                tension: 0.3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: '#94a3b8', boxWidth: 12 } }
+            },
+            scales: {
+              x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+              y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+            }
+          }
+        });
+      }
+
+      form.addEventListener('submit', (e) => { e.preventDefault(); runSimulation(); });
+      intervalSlider.addEventListener('change', runSimulation);
+      runSimulation();
+    });
+  </script>
+</body>
+</html>
